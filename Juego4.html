@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simon Dice Multijugador</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    #menu, #game, #resultados {
+      display: none;
+    }
+    .boton-color {
+      width: 100px;
+      height: 100px;
+      margin: 10px;
+      border: none;
+      border-radius: 15px;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+    .rojo { background: red; }
+    .verde { background: green; }
+    .azul { background: blue; }
+    .amarillo { background: yellow; color: #000; }
+    .boton-color.activo {
+      opacity: 1;
+    }
+    .jugadores-inputs {
+      margin: 10px 0;
+    }
+    .puntajes {
+      margin-top: 20px;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>SIMON DICE</h1>
+
+  <div id="menu">
+    <label for="numJugadores">Número de jugadores (1-4):</label>
+    <select id="numJugadores">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+    </select>
+    <div id="jugadoresInputs" class="jugadores-inputs"></div>
+    <button onclick="iniciarJuego()">Iniciar Juego</button>
+    <button onclick="alert('Debes repetir la secuencia de colores que se muestra. Si fallas, el juego termina.')">Instrucciones</button>
+  </div>
+
+  <div id="game">
+    <h2 id="turnoJugador"></h2>
+    <div>
+      <button class="boton-color rojo" onclick="botonPresionado('rojo')"></button>
+      <button class="boton-color verde" onclick="botonPresionado('verde')"></button>
+      <button class="boton-color azul" onclick="botonPresionado('azul')"></button>
+      <button class="boton-color amarillo" onclick="botonPresionado('amarillo')"></button>
+    </div>
+    <div class="puntajes" id="puntajes"></div>
+  </div>
+
+  <div id="resultados">
+    <h2 id="mensajeFinal"></h2>
+    <div id="ranking"></div>
+    <button onclick="mostrarMenu()">Volver al Menú</button>
+    <button onclick="location.reload()">Jugar Nuevamente</button>
+  </div>
+
+  <script>
+    const colores = ['rojo', 'verde', 'azul', 'amarillo'];
+    const sonidos = {
+      rojo: new Audio('https://s3.amazonaws.com/freecodecamp/simonSound1.mp3'),
+      verde: new Audio('https://s3.amazonaws.com/freecodecamp/simonSound2.mp3'),
+      azul: new Audio('https://s3.amazonaws.com/freecodecamp/simonSound3.mp3'),
+      amarillo: new Audio('https://s3.amazonaws.com/freecodecamp/simonSound4.mp3'),
+      error: new Audio('https://s3.amazonaws.com/adam-recvlohe-sounds/error.wav')
+    };
+
+    let secuencia = [];
+    let jugadorActual = 0;
+    let jugadores = [];
+    let entradaJugador = [];
+    let esperandoInput = false;
+    let maxSecuencia = 10;
+
+    document.getElementById('menu').style.display = 'block';
+
+    document.getElementById('numJugadores').addEventListener('change', function() {
+      const cantidad = parseInt(this.value);
+      const contenedor = document.getElementById('jugadoresInputs');
+      contenedor.innerHTML = '';
+      for (let i = 0; i < cantidad; i++) {
+        contenedor.innerHTML += `<input type="text" id="jugador${i}" placeholder="Nombre del Jugador ${i+1}" required><br>`;
+      }
+    });
+    document.getElementById('numJugadores').dispatchEvent(new Event('change'));
+
+    function iniciarJuego() {
+      jugadores = [];
+      const cantidad = parseInt(document.getElementById('numJugadores').value);
+      for (let i = 0; i < cantidad; i++) {
+        const nombre = document.getElementById(`jugador${i}`).value || `Jugador ${i+1}`;
+        jugadores.push({ nombre, puntaje: 0 });
+      }
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('game').style.display = 'block';
+      actualizarPuntajes();
+      siguienteTurno();
+    }
+
+    function siguienteTurno() {
+      entradaJugador = [];
+      if (secuencia.length >= maxSecuencia) return finalizarJuego();
+      jugadorActual = jugadorActual % jugadores.length;
+      document.getElementById('turnoJugador').innerText = `Turno de ${jugadores[jugadorActual].nombre}`;
+      setTimeout(() => {
+        agregarColorSecuencia();
+        reproducirSecuencia();
+      }, jugadores.length === 1 ? 2000 : 1000);
+    }
+
+    function agregarColorSecuencia() {
+      const color = colores[Math.floor(Math.random() * colores.length)];
+      secuencia.push(color);
+    }
+
+    function reproducirSecuencia() {
+      let i = 0;
+      const intervalo = setInterval(() => {
+        const color = secuencia[i];
+        destellarBoton(color);
+        sonidos[color].play();
+        i++;
+        if (i >= secuencia.length) {
+          clearInterval(intervalo);
+          esperandoInput = true;
+        }
+      }, 800);
+    }
+
+    function destellarBoton(color) {
+      const boton = document.querySelector(`.${color}`);
+      boton.classList.add('activo');
+      setTimeout(() => boton.classList.remove('activo'), 400);
+    }
+
+    function botonPresionado(color) {
+      if (!esperandoInput) return;
+      sonidos[color].play();
+      entradaJugador.push(color);
+      const index = entradaJugador.length - 1;
+      if (entradaJugador[index] !== secuencia[index]) {
+        sonidos.error.play();
+        esperandoInput = false;
+        return jugadores.length === 1 ? mostrarErrorFinal(jugadores[jugadorActual].nombre) : perderTurno();
+      }
+      if (entradaJugador.length === secuencia.length) {
+        jugadores[jugadorActual].puntaje += secuencia.length + 1;
+        jugadorActual++;
+        esperandoInput = false;
+        actualizarPuntajes();
+        setTimeout(siguienteTurno, jugadores.length === 1 ? 2000 : 1000);
+      } else {
+        jugadores[jugadorActual].puntaje++;
+        actualizarPuntajes();
+      }
+    }
+
+    function perderTurno() {
+      alert(`Falló ${jugadores[jugadorActual].nombre}`);
+      jugadorActual++;
+      setTimeout(siguienteTurno, 1000);
+    }
+
+    function mostrarErrorFinal(nombre) {
+      document.getElementById('game').style.display = 'none';
+      document.getElementById('resultados').style.display = 'block';
+      document.getElementById('mensajeFinal').innerText = `FALLASTE ${nombre}`;
+      const ranking = jugadores.map(j => `<p>${j.nombre}: ${j.puntaje} puntos</p>`).join('');
+      document.getElementById('ranking').innerHTML = ranking;
+    }
+
+    function finalizarJuego() {
+      document.getElementById('game').style.display = 'none';
+      document.getElementById('resultados').style.display = 'block';
+      const ranking = jugadores.sort((a, b) => b.puntaje - a.puntaje)
+                               .map(j => `<p>${j.nombre}: ${j.puntaje} puntos</p>`)
+                               .join('');
+      document.getElementById('ranking').innerHTML = ranking;
+      document.getElementById('mensajeFinal').innerText = `Ganó ${jugadores[0].nombre} con ${jugadores[0].puntaje} puntos`;
+    }
+
+    function actualizarPuntajes() {
+      const html = jugadores.map(j => `<strong>${j.nombre}</strong>: ${j.puntaje}`).join(' | ');
+      document.getElementById('puntajes').innerHTML = html;
+    }
+
+    function mostrarMenu() {
+      document.getElementById('resultados').style.display = 'none';
+      document.getElementById('menu').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
